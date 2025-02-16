@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meme-coin-platform
+  labels:
+    app: meme-coin-platform
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: meme-coin-platform
+  template:
+    metadata:
+      labels:
+        app: meme-coin-platform
+    spec:
+      containers:
+      - name: meme-coin-platform
+        image: dockerhub-username/meme-coin-platform:latest
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        env:
+        - name: NODE_ENV
+          value: production
+        - name: SOLANA_NETWORK
+          value: mainnet
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meme-coin-platform-service
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 3000
+  selector:
+    app: meme-coin-platform

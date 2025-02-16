@@ -1,0 +1,17 @@
+[package]
+name = "tax-token"
+version = "0.1.0"
+description = "Solana meme coin with built-in tax mechanism"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "tax_token"
+
+[features]
+no-entrypoint = []
+
+[dependencies]
+anchor-lang = "0.25.0"
+anchor-spl = "0.25.0"
+solana-program = "~1.14.0"

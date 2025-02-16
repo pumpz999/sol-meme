@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  web:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SOLANA_NETWORK=mainnet
+      - NEXT_PUBLIC_SOLANA_RPC_HOST=https://api.mainnet-beta.solana.com
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+  monitoring:
+    image: datadog/agent:latest
+    environment:
+      - DD_API_KEY=${DATADOG_API_KEY}
+      - DD_SITE=datadoghq.com
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+
+volumes:
+  redis-data:
+
+networks:
+  default:
+    driver: overlay
+    attachable: true
+  </boltArtifact>
+
+  <boltAction type="file" filePath="/home/project/.github/workflows/ci-cd.yml">
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+      
+      - name: Cache npm dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      
+      - name: Install Dependencies
+        run: npm ci
+      
+      - name: Lint Code
+        run: npm run lint
+      
+      - name: Run Tests
+        run: npm test
+
+  build-and-deploy:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/meme-coin-platform:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/meme-coin-platform:${{ github.sha }}
+      
+      - name: Deploy to Kubernetes
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            kubectl set image deployment/meme-coin-platform \
+              meme-coin-platform=${{ secrets.DOCKERHUB_USERNAME }}/meme-coin-platform:${{ github.sha }}
